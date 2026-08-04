@@ -7,6 +7,7 @@ use std::{
 use tauri_app_lib::{
     config_cmd::{load_from_path, save_to_path, AppConfig},
     secrets_cmd::{secret_account, validate_secret_key},
+    tray::select_mascot,
     window_cmd::{chat_position, home_url},
 };
 
@@ -36,6 +37,20 @@ fn app_config_serializes_with_frontend_field_names() {
     assert!(value.get("threadIdByAgent").is_some());
     assert!(value.get("petX").is_some());
     assert!(value.get("petY").is_some());
+}
+
+#[test]
+fn tray_mascot_selection_updates_only_supported_mascots() {
+    let mut cfg = AppConfig::default();
+
+    select_mascot(&mut cfg, "type").unwrap();
+    assert_eq!(cfg.mascot_id, "type");
+
+    select_mascot(&mut cfg, "peek").unwrap();
+    assert_eq!(cfg.mascot_id, "peek");
+
+    assert!(select_mascot(&mut cfg, "unknown").is_err());
+    assert_eq!(cfg.mascot_id, "peek");
 }
 
 #[test]
