@@ -10,11 +10,35 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "tauri-app",
-        "width": 800,
-        "height": 600
+        "label": "pet",
+        "title": "Octop Pet",
+        "width": 160,
+        "height": 160,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "resizable": false,
+        "skipTaskbar": true
+      },
+      {
+        "label": "chat",
+        "title": "Octop Chat",
+        "width": 420,
+        "height": 560,
+        "visible": false,
+        "decorations": true,
+        "resizable": true
+      },
+      {
+        "label": "settings",
+        "title": "Octop Pet 设置",
+        "width": 420,
+        "height": 360,
+        "visible": false,
+        "resizable": false
       }
     ],
     "security": {
