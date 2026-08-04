@@ -3,5 +3,9 @@
   "identifier": "default",
   "description": "Capability for all Octop Pet windows",
   "windows": ["pet", "chat", "settings"],
-  "permissions": ["core:default", "opener:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-position",
+    "opener:default"
+  ]
 }

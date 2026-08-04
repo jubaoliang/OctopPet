@@ -114,3 +114,37 @@ button {
     background-color: #0f0f0f69;
   }
 }
+
+html[data-window-label="pet"],
+html[data-window-label="pet"] body,
+html[data-window-label="pet"] #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent !important;
+}
+
+.pet-window {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  user-select: none;
+}
+
+.pet-window:active {
+  cursor: grabbing;
+}
+
+.mascot-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.placeholder-window {
+  padding: 1.5rem;
+}
