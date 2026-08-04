@@ -148,3 +148,68 @@ html[data-window-label="pet"] #root {
 .placeholder-window {
   padding: 1.5rem;
 }
+
+.settings-window {
+  box-sizing: border-box;
+  width: min(100%, 32rem);
+  margin: 0 auto;
+  padding: 1.75rem;
+}
+
+.settings-window h1 {
+  margin: 0 0 1.5rem;
+  font-size: 1.5rem;
+}
+
+.settings-form {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr);
+  gap: 1rem 0.75rem;
+  align-items: center;
+}
+
+.settings-form label {
+  font-weight: 600;
+}
+
+.settings-form input {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.settings-actions {
+  grid-column: 2;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.settings-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.settings-notice {
+  margin: 1rem 0 0 6.75rem;
+}
+
+.settings-notice--success {
+  color: #247a38;
+}
+
+.settings-notice--error {
+  color: #b42318;
+}
+
+@media (max-width: 420px) {
+  .settings-form {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-actions {
+    grid-column: 1;
+  }
+
+  .settings-notice {
+    margin-left: 0;
+  }
+}
