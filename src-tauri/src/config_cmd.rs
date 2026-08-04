@@ -1,9 +1,12 @@
-use std::{collections::HashMap, fs, path::Path};
+use std::{collections::HashMap, fs, path::Path, sync::Mutex};
 
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tauri::{AppHandle, Manager};
 
 const CONFIG_FILE_NAME: &str = "config.json";
+static CONFIG_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -58,6 +61,43 @@ pub fn save_to_path(path: &Path, cfg: &AppConfig) -> Result<(), String> {
         .map_err(|error| format!("failed to write config {}: {error}", path.display()))
 }
 
+fn patch_field<T: DeserializeOwned>(key: &str, value: Value) -> Result<T, String> {
+    serde_json::from_value(value).map_err(|error| format!("invalid config field {key}: {error}"))
+}
+
+fn merge_patch(cfg: &mut AppConfig, patch: Value) -> Result<(), String> {
+    let fields = patch
+        .as_object()
+        .ok_or_else(|| "config patch must be an object".to_string())?;
+
+    for (key, value) in fields {
+        match key.as_str() {
+            "baseUrl" => cfg.base_url = patch_field(key, value.clone())?,
+            "username" => cfg.username = patch_field(key, value.clone())?,
+            "mascotId" => cfg.mascot_id = patch_field(key, value.clone())?,
+            "lastAgentId" => cfg.last_agent_id = patch_field(key, value.clone())?,
+            "threadIdByAgent" => {
+                cfg.thread_id_by_agent = patch_field(key, value.clone())?;
+            }
+            "petX" => cfg.pet_x = patch_field(key, value.clone())?,
+            "petY" => cfg.pet_y = patch_field(key, value.clone())?,
+            _ => return Err(format!("unsupported config field: {key}")),
+        }
+    }
+
+    Ok(())
+}
+
+pub fn patch_at_path(path: &Path, patch: Value) -> Result<AppConfig, String> {
+    let _guard = CONFIG_WRITE_LOCK
+        .lock()
+        .map_err(|_| "config write lock is poisoned".to_string())?;
+    let mut cfg = load_from_path(path)?;
+    merge_patch(&mut cfg, patch)?;
+    save_to_path(path, &cfg)?;
+    Ok(cfg)
+}
+
 fn config_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
     app.path()
         .app_config_dir()
@@ -72,5 +112,13 @@ pub fn load_config(app: AppHandle) -> Result<AppConfig, String> {
 
 #[tauri::command]
 pub fn save_config(app: AppHandle, cfg: AppConfig) -> Result<(), String> {
+    let _guard = CONFIG_WRITE_LOCK
+        .lock()
+        .map_err(|_| "config write lock is poisoned".to_string())?;
     save_to_path(&config_path(&app)?, &cfg)
+}
+
+#[tauri::command]
+pub fn patch_config(app: AppHandle, patch: Value) -> Result<(), String> {
+    patch_at_path(&config_path(&app)?, patch).map(|_| ())
 }

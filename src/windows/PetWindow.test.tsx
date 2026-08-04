@@ -15,7 +15,7 @@ import PetWindow from "./PetWindow";
 
 const mocks = vi.hoisted(() => ({
   loadConfig: vi.fn(),
-  saveConfig: vi.fn(),
+  patchConfig: vi.fn(),
   showChatNearPet: vi.fn(),
   startDragging: vi.fn(),
   setPosition: vi.fn(),
@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../lib/tauriApi", () => ({
   tauriApi: {
     loadConfig: mocks.loadConfig,
-    saveConfig: mocks.saveConfig,
+    patchConfig: mocks.patchConfig,
     showChatNearPet: mocks.showChatNearPet,
   },
 }));
@@ -55,7 +55,7 @@ describe("PetWindow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.loadConfig.mockResolvedValue({ ...DEFAULT_APP_CONFIG });
-    mocks.saveConfig.mockResolvedValue(undefined);
+    mocks.patchConfig.mockResolvedValue(undefined);
     mocks.showChatNearPet.mockResolvedValue(undefined);
     mocks.startDragging.mockResolvedValue(undefined);
     mocks.setPosition.mockResolvedValue(undefined);
@@ -150,9 +150,10 @@ describe("PetWindow", () => {
     act(() => moved?.({ payload: { x: 120, y: 140 } }));
 
     await waitFor(() =>
-      expect(mocks.saveConfig).toHaveBeenCalledWith(
-        expect.objectContaining({ petX: 120, petY: 140 }),
-      ),
+      expect(mocks.patchConfig).toHaveBeenCalledWith({
+        petX: 120,
+        petY: 140,
+      }),
     );
 
     fireEvent.click(pet);

@@ -5,7 +5,7 @@ use tauri::{
 };
 
 use crate::{
-    config_cmd::{load_config, save_config, AppConfig},
+    config_cmd::{load_config, patch_config, AppConfig},
     window_cmd::{open_home, show_settings},
 };
 
@@ -46,7 +46,10 @@ fn toggle_pet(app: &AppHandle) -> Result<(), String> {
 fn choose_mascot(app: &AppHandle, mascot_id: &str) -> Result<(), String> {
     let mut cfg = load_config(app.clone())?;
     select_mascot(&mut cfg, mascot_id)?;
-    save_config(app.clone(), cfg)?;
+    patch_config(
+        app.clone(),
+        serde_json::json!({ "mascotId": cfg.mascot_id }),
+    )?;
     app.emit("mascot-changed", mascot_id)
         .map_err(|error| format!("failed to emit mascot change: {error}"))
 }

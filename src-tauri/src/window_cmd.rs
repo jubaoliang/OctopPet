@@ -1,6 +1,10 @@
 use tauri::{AppHandle, Manager, PhysicalPosition};
 use tauri_plugin_opener::OpenerExt;
 
+pub fn should_hide_on_close(label: &str) -> bool {
+    matches!(label, "chat" | "settings")
+}
+
 pub fn home_url(base_url: &str) -> Result<String, String> {
     let base_url = base_url.trim().trim_end_matches('/');
     if base_url.is_empty() {

@@ -5,10 +5,10 @@ use std::{
 };
 
 use tauri_app_lib::{
-    config_cmd::{load_from_path, save_to_path, AppConfig},
+    config_cmd::{load_from_path, patch_at_path, save_to_path, AppConfig},
     secrets_cmd::{secret_account, validate_secret_key},
     tray::select_mascot,
-    window_cmd::{chat_position, home_url},
+    window_cmd::{chat_position, home_url, should_hide_on_close},
 };
 
 #[test]
@@ -76,6 +76,45 @@ fn config_file_defaults_when_missing_and_round_trips() {
 }
 
 #[test]
+fn config_patch_updates_only_owned_fields() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("octop-pet-patch-{unique}"));
+    let path = dir.join("config.json");
+    let original = AppConfig {
+        base_url: "https://old.example".into(),
+        username: "old-user".into(),
+        mascot_id: "type".into(),
+        pet_x: Some(10.0),
+        pet_y: Some(20.0),
+        ..AppConfig::default()
+    };
+    save_to_path(&path, &original).unwrap();
+
+    patch_at_path(
+        &path,
+        serde_json::json!({
+            "baseUrl": "https://new.example",
+            "username": "new-user"
+        }),
+    )
+    .unwrap();
+
+    assert_eq!(
+        load_from_path(&path).unwrap(),
+        AppConfig {
+            base_url: "https://new.example".into(),
+            username: "new-user".into(),
+            ..original
+        }
+    );
+    assert!(patch_at_path(&path, serde_json::json!({ "unknown": true })).is_err());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn secrets_are_scoped_by_username_and_restricted_to_known_keys() {
     assert_eq!(
         secret_account("alice", "password").unwrap(),
@@ -85,6 +124,13 @@ fn secrets_are_scoped_by_username_and_restricted_to_known_keys() {
     assert!(validate_secret_key("access_token").is_ok());
     assert!(validate_secret_key("other").is_err());
     assert!(secret_account("", "password").is_err());
+}
+
+#[test]
+fn chat_and_settings_close_requests_are_hidden() {
+    assert!(should_hide_on_close("chat"));
+    assert!(should_hide_on_close("settings"));
+    assert!(!should_hide_on_close("pet"));
 }
 
 #[test]

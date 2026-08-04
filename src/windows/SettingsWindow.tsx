@@ -22,13 +22,19 @@ export default function SettingsWindow() {
   useEffect(() => {
     let active = true;
 
-    Promise.all([tauriApi.loadConfig(), tauriApi.getSecret("password")])
-      .then(([loadedConfig, savedPassword]) => {
+    tauriApi
+      .loadConfig()
+      .then(async (loadedConfig) => {
         if (!active) return;
         setConfig(loadedConfig);
         setBaseUrl(loadedConfig.baseUrl);
         setUsername(loadedConfig.username);
-        setPassword(savedPassword ?? "");
+        if (!loadedConfig.username.trim()) return;
+
+        const savedPassword = await tauriApi
+          .getSecret("password")
+          .catch(() => null);
+        if (active) setPassword(savedPassword ?? "");
       })
       .catch((error: unknown) => {
         if (active) {
@@ -51,15 +57,18 @@ export default function SettingsWindow() {
     setNotice(null);
     try {
       const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
-      const nextConfig = {
-        ...config,
+      const patch = {
         baseUrl: normalizedBaseUrl,
         username,
       };
-      await tauriApi.saveConfig(nextConfig);
-      await tauriApi.setSecret("password", password);
+      await tauriApi.patchConfig(patch);
+      if (username.trim()) {
+        await tauriApi.setSecret("password", password);
+      }
+      const nextConfig = { ...config, ...patch };
       setConfig(nextConfig);
       setBaseUrl(normalizedBaseUrl);
+      await tauriApi.emitAuthUpdated();
       setNotice({ kind: "success", text: "设置已保存" });
     } catch (error) {
       setNotice({
@@ -81,7 +90,12 @@ export default function SettingsWindow() {
         username,
         password,
       );
+      const patch = { baseUrl: normalizedBaseUrl, username };
+      await tauriApi.patchConfig(patch);
       await tauriApi.setSecret("access_token", access_token);
+      if (config) setConfig({ ...config, ...patch });
+      setBaseUrl(normalizedBaseUrl);
+      await tauriApi.emitAuthUpdated();
       setNotice({ kind: "success", text: "连接成功" });
     } catch (error) {
       setNotice({

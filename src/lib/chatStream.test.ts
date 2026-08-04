@@ -14,6 +14,9 @@ describe("chatStream", () => {
     expect(buildChatWsUrl("http://localhost:8787", "a1", "tok")).toBe(
       "ws://localhost:8787/api/agents/a1/chat/ws?token=tok",
     );
+    expect(buildChatWsUrl("https://h.example/octop", "a/1", "t ok")).toBe(
+      "wss://h.example/octop/api/agents/a%2F1/chat/ws?token=t+ok",
+    );
   });
 
   it("builds user_turn payload", () => {

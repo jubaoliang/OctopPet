@@ -8,8 +8,10 @@ export function buildChatWsUrl(
   const root = normalizeBaseUrl(baseUrl);
   const u = new URL(root);
   u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
-  u.pathname = `/api/agents/${encodeURIComponent(agentId)}/chat/ws`;
+  const prefix = u.pathname.replace(/\/+$/, "");
+  u.pathname = `${prefix}/api/agents/${encodeURIComponent(agentId)}/chat/ws`;
   u.search = "";
+  u.hash = "";
   u.searchParams.set("token", token);
   return u.toString();
 }

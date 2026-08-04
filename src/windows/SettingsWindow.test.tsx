@@ -8,18 +8,20 @@ import SettingsWindow from "./SettingsWindow";
 
 const mocks = vi.hoisted(() => ({
   loadConfig: vi.fn(),
-  saveConfig: vi.fn(),
+  patchConfig: vi.fn(),
   getSecret: vi.fn(),
   setSecret: vi.fn(),
+  emitAuthUpdated: vi.fn(),
   login: vi.fn(),
 }));
 
 vi.mock("../lib/tauriApi", () => ({
   tauriApi: {
     loadConfig: mocks.loadConfig,
-    saveConfig: mocks.saveConfig,
+    patchConfig: mocks.patchConfig,
     getSecret: mocks.getSecret,
     setSecret: mocks.setSecret,
+    emitAuthUpdated: mocks.emitAuthUpdated,
   },
 }));
 
@@ -41,8 +43,9 @@ describe("SettingsWindow", () => {
     mocks.getSecret.mockImplementation(async (key: string) =>
       key === "password" ? "secret-password" : null,
     );
-    mocks.saveConfig.mockResolvedValue(undefined);
+    mocks.patchConfig.mockResolvedValue(undefined);
     mocks.setSecret.mockResolvedValue(undefined);
+    mocks.emitAuthUpdated.mockResolvedValue(undefined);
     mocks.login.mockResolvedValue({
       access_token: "hidden-access-token",
       expires_in: 3600,
@@ -61,7 +64,20 @@ describe("SettingsWindow", () => {
     expect(screen.queryByText("hidden-access-token")).not.toBeInTheDocument();
   });
 
-  it("normalizes and saves credentials while preserving other config", async () => {
+  it("first run loads config and enables actions without reading an unscoped password", async () => {
+    mocks.loadConfig.mockResolvedValue({ ...DEFAULT_APP_CONFIG });
+    mocks.getSecret.mockRejectedValue(new Error("username is not configured"));
+
+    render(<SettingsWindow />);
+
+    expect(await screen.findByLabelText("用户名")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "保存" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "测试连接" })).toBeEnabled();
+    expect(mocks.getSecret).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("normalizes and patches only credentials", async () => {
     render(<SettingsWindow />);
     const baseUrl = await screen.findByLabelText("服务地址");
 
@@ -77,14 +93,13 @@ describe("SettingsWindow", () => {
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() =>
-      expect(mocks.saveConfig).toHaveBeenCalledWith({
-        ...DEFAULT_APP_CONFIG,
+      expect(mocks.patchConfig).toHaveBeenCalledWith({
         baseUrl: "https://new.example",
         username: "new-user",
-        mascotId: "type",
       }),
     );
     expect(mocks.setSecret).toHaveBeenCalledWith("password", "new-password");
+    expect(mocks.emitAuthUpdated).toHaveBeenCalledOnce();
     expect(await screen.findByText("设置已保存")).toBeInTheDocument();
   });
 
@@ -101,10 +116,18 @@ describe("SettingsWindow", () => {
         "secret-password",
       ),
     );
+    expect(mocks.patchConfig).toHaveBeenCalledWith({
+      baseUrl: "https://octop.example",
+      username: "octopus",
+    });
+    expect(mocks.patchConfig.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.setSecret.mock.invocationCallOrder[0],
+    );
     expect(mocks.setSecret).toHaveBeenCalledWith(
       "access_token",
       "hidden-access-token",
     );
+    expect(mocks.emitAuthUpdated).toHaveBeenCalledOnce();
     expect(await screen.findByText("连接成功")).toBeInTheDocument();
     expect(screen.queryByText("hidden-access-token")).not.toBeInTheDocument();
 

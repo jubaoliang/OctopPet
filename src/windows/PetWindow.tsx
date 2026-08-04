@@ -73,7 +73,12 @@ export default function PetWindow() {
           };
           configRef.current = updatedConfig;
           saveQueueRef.current = saveQueueRef.current
-            .then(() => tauriApi.saveConfig(updatedConfig))
+            .then(() =>
+              tauriApi.patchConfig({
+                petX: position.x,
+                petY: position.y,
+              }),
+            )
             .catch((error) => console.error("保存宠物位置失败", error));
         })
         .then(registerUnlistener)

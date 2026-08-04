@@ -10,9 +10,11 @@ import ChatWindow from "./ChatWindow";
 
 const mocks = vi.hoisted(() => ({
   loadConfig: vi.fn(),
-  saveConfig: vi.fn(),
+  patchConfig: vi.fn(),
   getSecret: vi.fn(),
   setSecret: vi.fn(),
+  deleteSecret: vi.fn(),
+  listenAuthUpdated: vi.fn(),
   showSettings: vi.fn(),
   listAgents: vi.fn(),
   createThread: vi.fn(),
@@ -23,9 +25,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../lib/tauriApi", () => ({
   tauriApi: {
     loadConfig: mocks.loadConfig,
-    saveConfig: mocks.saveConfig,
+    patchConfig: mocks.patchConfig,
     getSecret: mocks.getSecret,
     setSecret: mocks.setSecret,
+    deleteSecret: mocks.deleteSecret,
+    listenAuthUpdated: mocks.listenAuthUpdated,
     showSettings: mocks.showSettings,
   },
 }));
@@ -92,8 +96,10 @@ describe("ChatWindow", () => {
     mocks.getSecret.mockImplementation(async (key: string) =>
       key === "access_token" ? "token-1" : null,
     );
-    mocks.saveConfig.mockResolvedValue(undefined);
+    mocks.patchConfig.mockResolvedValue(undefined);
     mocks.setSecret.mockResolvedValue(undefined);
+    mocks.deleteSecret.mockResolvedValue(undefined);
+    mocks.listenAuthUpdated.mockResolvedValue(vi.fn());
     mocks.showSettings.mockResolvedValue(undefined);
     mocks.listAgents.mockResolvedValue([
       { id: "a1", name: "助手一", state: "online" },
@@ -115,6 +121,31 @@ describe("ChatWindow", () => {
     fireEvent.click(screen.getByRole("button", { name: "打开设置" }));
     expect(mocks.showSettings).toHaveBeenCalledOnce();
     expect(mocks.listAgents).not.toHaveBeenCalled();
+  });
+
+  it("设置更新事件到达后重新初始化聊天", async () => {
+    let authUpdated: (() => void) | undefined;
+    mocks.getSecret
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce("token-after-settings");
+    mocks.listenAuthUpdated.mockImplementation(async (handler: () => void) => {
+      authUpdated = handler;
+      return vi.fn();
+    });
+
+    render(<ChatWindow />);
+
+    expect(await screen.findByText("需要先完成登录设置")).toBeInTheDocument();
+    await waitFor(() => expect(authUpdated).toBeDefined());
+    authUpdated?.();
+
+    expect(
+      await screen.findByRole("combobox", { name: "选择代理" }),
+    ).toBeInTheDocument();
+    expect(mocks.listAgents).toHaveBeenCalledWith(
+      "https://octop.example",
+      "token-after-settings",
+    );
   });
 
   it("恢复历史并流式发送消息，停止时发送取消帧", async () => {
@@ -191,12 +222,10 @@ describe("ChatWindow", () => {
         "a2",
       ),
     );
-    expect(mocks.saveConfig).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(mocks.patchConfig).toHaveBeenCalledWith({
         lastAgentId: "a2",
         threadIdByAgent: { a1: "thread-1", a2: "thread-2" },
-      }),
-    );
+    });
   });
 
   it("代理请求遇到一次 401 时使用密码重新登录并重试", async () => {
@@ -216,11 +245,27 @@ describe("ChatWindow", () => {
       "juba",
       "secret",
     );
+    expect(mocks.deleteSecret).toHaveBeenCalledWith("access_token");
     expect(mocks.setSecret).toHaveBeenCalledWith("access_token", "fresh");
     expect(mocks.listAgents).toHaveBeenLastCalledWith(
       "https://octop.example",
       "fresh",
     );
+  });
+
+  it("401 静默登录失败时清除令牌并打开设置", async () => {
+    mocks.getSecret.mockImplementation(async (key: string) =>
+      key === "access_token" ? "expired" : key === "password" ? "secret" : null,
+    );
+    mocks.listAgents.mockRejectedValueOnce(new OctopHttpError(401, "expired"));
+    mocks.login.mockRejectedValueOnce(new OctopHttpError(401, "bad credentials"));
+
+    render(<ChatWindow />);
+
+    expect(await screen.findByText("需要先完成登录设置")).toBeInTheDocument();
+    expect(mocks.deleteSecret).toHaveBeenCalledWith("access_token");
+    expect(mocks.login).toHaveBeenCalledOnce();
+    expect(mocks.showSettings).toHaveBeenCalledOnce();
   });
 
   it("严格模式重复挂载时只采用当前初始化结果", async () => {

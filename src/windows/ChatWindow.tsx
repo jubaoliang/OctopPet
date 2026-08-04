@@ -83,6 +83,13 @@ export default function ChatWindow() {
   const loadSequenceRef = useRef(0);
   const mountedRef = useRef(true);
 
+  const requireSettings = useCallback(async () => {
+    tokenRef.current = "";
+    setNeedsSettings(true);
+    setConnection("disconnected");
+    await tauriApi.showSettings().catch(() => undefined);
+  }, []);
+
   const authorized = useCallback(
     async <T,>(operation: (token: string) => Promise<T>): Promise<T> => {
       try {
@@ -92,17 +99,39 @@ export default function ChatWindow() {
           throw requestError;
         }
 
+        tokenRef.current = "";
+        await tauriApi.deleteSecret("access_token");
         const config = configRef.current;
-        const password = await tauriApi.getSecret("password");
-        if (!config || !password) throw requestError;
+        let freshToken: string;
+        try {
+          const password = await tauriApi.getSecret("password");
+          if (!config || !password) throw requestError;
 
-        const result = await login(config.baseUrl, config.username, password);
-        await tauriApi.setSecret("access_token", result.access_token);
-        tokenRef.current = result.access_token;
-        return operation(result.access_token);
+          const result = await login(config.baseUrl, config.username, password);
+          await tauriApi.setSecret("access_token", result.access_token);
+          freshToken = result.access_token;
+          tokenRef.current = freshToken;
+        } catch (loginError) {
+          await requireSettings();
+          throw loginError;
+        }
+
+        try {
+          return await operation(freshToken);
+        } catch (retryError) {
+          if (
+            retryError instanceof OctopHttpError &&
+            retryError.status === 401
+          ) {
+            tokenRef.current = "";
+            await tauriApi.deleteSecret("access_token");
+            await requireSettings();
+          }
+          throw retryError;
+        }
       }
     },
-    [],
+    [requireSettings],
   );
 
   const stopStream = useCallback(() => {
@@ -169,7 +198,10 @@ export default function ChatWindow() {
         }
 
         const nextConfig = withThreadForAgent(config, nextAgentId, threadId);
-        await tauriApi.saveConfig(nextConfig);
+        await tauriApi.patchConfig({
+          lastAgentId: nextConfig.lastAgentId,
+          threadIdByAgent: nextConfig.threadIdByAgent,
+        });
         if (sequence !== loadSequenceRef.current || !mountedRef.current) return;
 
         configRef.current = nextConfig;
@@ -189,58 +221,76 @@ export default function ChatWindow() {
     [authorized, stopStream],
   );
 
-  useEffect(() => {
-    let cancelled = false;
-    mountedRef.current = true;
+  const initialize = useCallback(async () => {
+    const sequence = ++loadSequenceRef.current;
+    setConnection("loading");
+    setError("");
+    try {
+      const [config, token] = await Promise.all([
+        tauriApi.loadConfig(),
+        tauriApi.getSecret("access_token"),
+      ]);
+      if (sequence !== loadSequenceRef.current || !mountedRef.current) return;
+      configRef.current = config;
 
-    async function initialize() {
-      try {
-        const [config, token] = await Promise.all([
-          tauriApi.loadConfig(),
-          tauriApi.getSecret("access_token"),
-        ]);
-        if (cancelled || !mountedRef.current) return;
-        configRef.current = config;
-
-        if (!token) {
-          setNeedsSettings(true);
-          setConnection("disconnected");
-          return;
-        }
-
-        tokenRef.current = token;
-        const availableAgents = await authorized((activeToken) =>
-          listAgents(config.baseUrl, activeToken),
-        );
-        if (cancelled || !mountedRef.current) return;
-        if (availableAgents.length === 0) {
-          setError("没有可用代理");
-          setConnection("disconnected");
-          return;
-        }
-
-        setAgents(availableAgents);
-        const selected =
-          availableAgents.find((agent) => agent.id === config.lastAgentId) ??
-          availableAgents[0];
-        await openAgent(selected.id);
-      } catch (initialError) {
-        if (cancelled || !mountedRef.current) return;
-        setError(errorText(initialError));
+      if (!token) {
+        setNeedsSettings(true);
         setConnection("disconnected");
+        return;
       }
+
+      tokenRef.current = token;
+      setNeedsSettings(false);
+      const availableAgents = await authorized((activeToken) =>
+        listAgents(config.baseUrl, activeToken),
+      );
+      if (sequence !== loadSequenceRef.current || !mountedRef.current) return;
+      if (availableAgents.length === 0) {
+        setError("没有可用代理");
+        setConnection("disconnected");
+        return;
+      }
+
+      setAgents(availableAgents);
+      const selected =
+        availableAgents.find((agent) => agent.id === config.lastAgentId) ??
+        availableAgents[0];
+      await openAgent(selected.id);
+    } catch (initialError) {
+      if (sequence !== loadSequenceRef.current || !mountedRef.current) return;
+      setError(errorText(initialError));
+      setConnection("disconnected");
     }
+  }, [authorized, openAgent]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
 
     void initialize();
+    void tauriApi
+      .listenAuthUpdated(() => {
+        if (!disposed && mountedRef.current) void initialize();
+      })
+      .then((registeredUnlisten) => {
+        if (disposed) {
+          registeredUnlisten();
+        } else {
+          unlisten = registeredUnlisten;
+        }
+      });
+
     return () => {
-      cancelled = true;
+      disposed = true;
       mountedRef.current = false;
       loadSequenceRef.current += 1;
       streamFinishedRef.current = true;
       socketRef.current?.close();
       socketRef.current = null;
+      unlisten?.();
     };
-  }, [authorized, openAgent]);
+  }, [initialize]);
 
   const sendMessage = useCallback((text: string) => {
     const config = configRef.current;
