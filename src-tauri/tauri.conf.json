@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Octop Pet",
+  "productName": "OctopPet",
   "version": "0.1.0",
   "identifier": "com.octop.pet",
   "build": {
@@ -14,31 +14,42 @@
     "windows": [
       {
         "label": "pet",
-        "title": "Octop Pet",
+        "title": "OctopPet",
         "width": 160,
         "height": 160,
         "decorations": false,
         "transparent": true,
+        "shadow": false,
         "alwaysOnTop": true,
         "resizable": false,
-        "skipTaskbar": true
+        "skipTaskbar": true,
+        "backgroundColor": "#00000000"
       },
       {
         "label": "chat",
         "title": "Octop Chat",
-        "width": 420,
-        "height": 560,
+        "width": 400,
+        "height": 220,
+        "minWidth": 320,
+        "minHeight": 120,
         "visible": false,
-        "decorations": true,
-        "resizable": true
+        "decorations": false,
+        "transparent": true,
+        "shadow": true,
+        "resizable": false,
+        "backgroundColor": "#00000000"
       },
       {
         "label": "settings",
-        "title": "Octop Pet 设置",
-        "width": 420,
+        "title": "设置",
+        "width": 480,
         "height": 360,
         "visible": false,
-        "resizable": false
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": true,
+        "backgroundColor": "#00000000"
       }
     ],
     "security": {

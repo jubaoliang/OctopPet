@@ -3,5 +3,12 @@ interface MascotImageProps {
 }
 
 export default function MascotImage({ src }: MascotImageProps) {
-  return <img className="mascot-image" src={src} alt="Octop 宠物" draggable={false} />;
+  return (
+    <img
+      className="mascot-image"
+      src={src}
+      alt="Octop 宠物"
+      draggable={false}
+    />
+  );
 }

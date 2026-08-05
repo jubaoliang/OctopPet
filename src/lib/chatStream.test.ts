@@ -28,9 +28,61 @@ describe("chatStream", () => {
     });
   });
 
+  it("includes model, mcp_servers, and multimodal attachments", () => {
+    expect(
+      buildUserTurnPayload({
+        text: "看图",
+        threadId: "t1",
+        sessionKey: "sk",
+        model: "openai/gpt-4o",
+        mcpServers: ["github", "browser"],
+        attachments: [
+          {
+            filename: "a.png",
+            mediaType: "image/png",
+            workspacePath: "inbound/a.png",
+            url: "https://h.example/inbound/a.png",
+          },
+          {
+            filename: "notes.pdf",
+            mediaType: "application/pdf",
+            workspacePath: "inbound/notes.pdf",
+            url: "inbound/notes.pdf",
+          },
+        ],
+      }),
+    ).toEqual({
+      type: "user_turn",
+      text: "看图",
+      thread_id: "t1",
+      session_key: "sk",
+      model: "openai/gpt-4o",
+      mcp_servers: ["github", "browser"],
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "看图" },
+            {
+              type: "image_url",
+              image_url: { url: "https://h.example/inbound/a.png" },
+            },
+            {
+              type: "file",
+              file: {
+                filename: "notes.pdf",
+                path: "inbound/notes.pdf",
+                media_type: "application/pdf",
+              },
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   it("accumulates tokens and finishes on done/error", () => {
-    let t = "";
-    let r = applyStreamChunk(t, { type: "token", content: "Hel" });
+    let r = applyStreamChunk("", { type: "token", content: "Hel" });
     expect(r).toEqual({ text: "Hel", done: false });
     r = applyStreamChunk(r.text, { type: "token", content: "lo" });
     expect(r).toEqual({ text: "Hello", done: false });
@@ -41,6 +93,9 @@ describe("chatStream", () => {
   });
 
   it("builds cancel payload", () => {
-    expect(buildCancelPayload("t1")).toEqual({ type: "cancel", thread_id: "t1" });
+    expect(buildCancelPayload("t1")).toEqual({
+      type: "cancel",
+      thread_id: "t1",
+    });
   });
 });

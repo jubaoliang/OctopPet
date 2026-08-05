@@ -17,10 +17,17 @@ const mocks = vi.hoisted(() => ({
   loadConfig: vi.fn(),
   patchConfig: vi.fn(),
   showChatNearPet: vi.fn(),
-  startDragging: vi.fn(),
-  setPosition: vi.fn(),
-  listen: vi.fn(),
-  onMoved: vi.fn(),
+  showSettings: vi.fn(),
+  hidePet: vi.fn(),
+  openHome: vi.fn(),
+  listenMascotChanged: vi.fn(),
+  clearPetWebviewChrome: vi.fn(),
+  setPetWebviewPosition: vi.fn(),
+  startPetWebviewDrag: vi.fn(),
+  onPetWebviewMoved: vi.fn(),
+  onPetWebviewFocusChanged: vi.fn(),
+  getPetWebviewWindow: vi.fn(),
+  showPetContextMenu: vi.fn(),
 }));
 
 vi.mock("../lib/tauriApi", () => ({
@@ -28,25 +35,24 @@ vi.mock("../lib/tauriApi", () => ({
     loadConfig: mocks.loadConfig,
     patchConfig: mocks.patchConfig,
     showChatNearPet: mocks.showChatNearPet,
+    showSettings: mocks.showSettings,
+    hidePet: mocks.hidePet,
+    openHome: mocks.openHome,
+    listenMascotChanged: mocks.listenMascotChanged,
   },
 }));
 
-vi.mock("@tauri-apps/api/event", () => ({
-  listen: mocks.listen,
+vi.mock("../lib/tauriWebviewApi", () => ({
+  clearPetWebviewChrome: mocks.clearPetWebviewChrome,
+  setPetWebviewPosition: mocks.setPetWebviewPosition,
+  startPetWebviewDrag: mocks.startPetWebviewDrag,
+  onPetWebviewMoved: mocks.onPetWebviewMoved,
+  onPetWebviewFocusChanged: mocks.onPetWebviewFocusChanged,
+  getPetWebviewWindow: mocks.getPetWebviewWindow,
 }));
 
-vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({
-    onMoved: mocks.onMoved,
-    setPosition: mocks.setPosition,
-    startDragging: mocks.startDragging,
-  }),
-  PhysicalPosition: class PhysicalPosition {
-    constructor(
-      public x: number,
-      public y: number,
-    ) {}
-  },
+vi.mock("../lib/petContextMenu", () => ({
+  showPetContextMenu: mocks.showPetContextMenu,
 }));
 
 describe("PetWindow", () => {
@@ -54,109 +60,140 @@ describe("PetWindow", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.loadConfig.mockResolvedValue({ ...DEFAULT_APP_CONFIG });
+    mocks.loadConfig.mockResolvedValue({
+      ...DEFAULT_APP_CONFIG,
+      mascotId: "type",
+      petX: 120,
+      petY: 240,
+    });
     mocks.patchConfig.mockResolvedValue(undefined);
     mocks.showChatNearPet.mockResolvedValue(undefined);
-    mocks.startDragging.mockResolvedValue(undefined);
-    mocks.setPosition.mockResolvedValue(undefined);
-    mocks.listen.mockResolvedValue(vi.fn());
-    mocks.onMoved.mockResolvedValue(vi.fn());
-  });
-
-  it("loads the configured mascot and reacts to mascot changes", async () => {
-    let mascotChanged:
-      | ((event: { payload: "peek" | "type" }) => void)
-      | undefined;
-    mocks.loadConfig.mockResolvedValue({
-      ...DEFAULT_APP_CONFIG,
-      mascotId: "peek",
+    mocks.showSettings.mockResolvedValue(undefined);
+    mocks.hidePet.mockResolvedValue(undefined);
+    mocks.openHome.mockResolvedValue(undefined);
+    mocks.listenMascotChanged.mockResolvedValue(vi.fn());
+    mocks.clearPetWebviewChrome.mockResolvedValue(undefined);
+    mocks.setPetWebviewPosition.mockResolvedValue(undefined);
+    mocks.startPetWebviewDrag.mockResolvedValue(undefined);
+    mocks.showPetContextMenu.mockResolvedValue(undefined);
+    mocks.getPetWebviewWindow.mockReturnValue({});
+    mocks.onPetWebviewMoved.mockImplementation(async (handler) => {
+      await Promise.resolve();
+      handler({ x: 130, y: 250 });
+      return vi.fn();
     });
-    mocks.listen.mockImplementation(
-      async (_event: string, handler: typeof mascotChanged) => {
-        mascotChanged = handler;
-        return vi.fn();
-      },
-    );
+    mocks.onPetWebviewFocusChanged.mockResolvedValue(vi.fn());
+  });
 
+  it("loads mascot from config on mount", async () => {
     render(<PetWindow />);
+    await waitFor(() => expect(mocks.loadConfig).toHaveBeenCalledOnce());
+    expect(mocks.setPetWebviewPosition).toHaveBeenCalledWith(120, 240);
+  });
 
-    expect(await screen.findByRole("img", { name: "Octop 宠物" })).toHaveAttribute(
-      "src",
-      "/mascots/peek.webp",
-    );
+  it("opens chat on click without drag", async () => {
+    render(<PetWindow />);
+    await waitFor(() => expect(mocks.loadConfig).toHaveBeenCalled());
 
-    act(() => mascotChanged?.({ payload: "type" }));
+    fireEvent.click(screen.getByTestId("pet-drag-region"));
 
-    expect(screen.getByRole("img", { name: "Octop 宠物" })).toHaveAttribute(
-      "src",
-      "/mascots/type.webp",
+    await waitFor(() => expect(mocks.showChatNearPet).toHaveBeenCalledOnce());
+  });
+
+  it("starts drag after pointer moves beyond threshold", async () => {
+    render(<PetWindow />);
+    await waitFor(() => expect(mocks.loadConfig).toHaveBeenCalled());
+
+    const region = screen.getByTestId("pet-drag-region");
+    fireEvent.pointerDown(region, { clientX: 0, clientY: 0, button: 0 });
+    fireEvent.pointerMove(region, { clientX: 20, clientY: 0, button: 0 });
+
+    await waitFor(() =>
+      expect(mocks.startPetWebviewDrag).toHaveBeenCalledOnce(),
     );
   });
 
-  it("waits for config before accepting position changes", async () => {
-    let resolveConfig:
-      | ((config: typeof DEFAULT_APP_CONFIG) => void)
-      | undefined;
-    mocks.loadConfig.mockReturnValue(
-      new Promise((resolve) => {
-        resolveConfig = resolve;
-      }),
-    );
-
+  it("does not open chat after a drag click", async () => {
     render(<PetWindow />);
+    await waitFor(() => expect(mocks.loadConfig).toHaveBeenCalled());
 
-    expect(mocks.onMoved).not.toHaveBeenCalled();
+    const region = screen.getByTestId("pet-drag-region");
+    fireEvent.pointerDown(region, { clientX: 0, clientY: 0, button: 0 });
+    fireEvent.pointerMove(region, { clientX: 20, clientY: 0, button: 0 });
+    fireEvent.click(region);
 
-    act(() => resolveConfig?.({ ...DEFAULT_APP_CONFIG }));
-    await waitFor(() => expect(mocks.onMoved).toHaveBeenCalledOnce());
+    expect(mocks.showChatNearPet).not.toHaveBeenCalled();
   });
 
-  it("uses a native drag region and opens chat when the window did not move", async () => {
+  it("debounces rapid chat opens", async () => {
+    vi.useFakeTimers();
     render(<PetWindow />);
-    const pet = await screen.findByTestId("pet-drag-region");
+    await act(async () => {
+      await Promise.resolve();
+    });
 
-    fireEvent.pointerDown(pet, { clientX: 10, clientY: 10 });
-    expect(pet).toHaveAttribute("data-tauri-drag-region");
-    expect(mocks.startDragging).not.toHaveBeenCalled();
-    fireEvent.click(pet);
+    const region = screen.getByTestId("pet-drag-region");
+    fireEvent.click(region);
+    fireEvent.click(region);
 
     expect(mocks.showChatNearPet).toHaveBeenCalledOnce();
+    vi.useRealTimers();
   });
 
-  it("restores and saves the pet position while suppressing drag clicks", async () => {
-    let moved:
-      | ((event: { payload: { x: number; y: number } }) => void)
-      | undefined;
-    mocks.loadConfig.mockResolvedValue({
-      ...DEFAULT_APP_CONFIG,
-      petX: 40,
-      petY: 60,
-    });
-    mocks.onMoved.mockImplementation(async (handler: typeof moved) => {
-      moved = handler;
+  it("persists position when webview moves", async () => {
+    render(<PetWindow />);
+    await waitFor(() =>
+      expect(mocks.patchConfig).toHaveBeenCalledWith({
+        petX: 130,
+        petY: 250,
+      }),
+    );
+  });
+
+  it("shows native context menu on right click", async () => {
+    render(<PetWindow />);
+    await waitFor(() => expect(mocks.loadConfig).toHaveBeenCalled());
+
+    fireEvent.contextMenu(screen.getByTestId("pet-drag-region"));
+
+    await waitFor(() =>
+      expect(mocks.showPetContextMenu).toHaveBeenCalledOnce(),
+    );
+  });
+
+  it("syncs mascot from mascot-changed event", async () => {
+    let mascotHandler: ((id: "peek" | "type") => void) | undefined;
+    mocks.listenMascotChanged.mockImplementation(async (handler) => {
+      mascotHandler = handler;
       return vi.fn();
     });
 
     render(<PetWindow />);
-    const pet = await screen.findByTestId("pet-drag-region");
+    await waitFor(() => expect(mascotHandler).toBeDefined());
+
+    act(() => mascotHandler?.("peek"));
 
     await waitFor(() =>
-      expect(mocks.setPosition).toHaveBeenCalledWith(
-        expect.objectContaining({ x: 40, y: 60 }),
+      expect(screen.getByRole("img")).toHaveAttribute(
+        "src",
+        "/mascots/peek.webp",
       ),
     );
+  });
 
-    fireEvent.pointerDown(pet, { clientX: 10, clientY: 10 });
-    act(() => moved?.({ payload: { x: 120, y: 140 } }));
+  it("clears transparent chrome on focus changes", async () => {
+    let focusHandler: (() => void) | undefined;
+    mocks.onPetWebviewFocusChanged.mockImplementation(async (handler) => {
+      focusHandler = handler;
+      return vi.fn();
+    });
 
-    await waitFor(() =>
-      expect(mocks.patchConfig).toHaveBeenCalledWith({
-        petX: 120,
-        petY: 140,
-      }),
-    );
+    render(<PetWindow />);
+    await waitFor(() => expect(focusHandler).toBeDefined());
 
-    fireEvent.click(pet);
-    expect(mocks.showChatNearPet).not.toHaveBeenCalled();
+    mocks.clearPetWebviewChrome.mockClear();
+    act(() => focusHandler?.());
+
+    await waitFor(() => expect(mocks.clearPetWebviewChrome).toHaveBeenCalled());
   });
 });

@@ -8,6 +8,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   threadIdByAgent: {},
   petX: null,
   petY: null,
+  shortcutOpenPet: "CmdOrCtrl+Shift+O",
+  shortcutOpenHome: "CmdOrCtrl+Shift+H",
 };
 
 export const MASCOT_SRC: Record<MascotId, string> = {

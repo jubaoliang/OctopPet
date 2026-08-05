@@ -1,24 +1,81 @@
-# Logs
-logs
-*.log
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Environment / secrets — never commit credentials
+.env
+.env.*
+!.env.example
+
+# Node / frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+.npm/
+.pnpm-store/
+yarn.lock
+pnpm-lock.yaml
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Test / coverage
+coverage/
+.nyc_output/
+vitest.config.ts.timestamp-*
 
-# Editor directories and files
+# Rust / Tauri
+**/target/
+**/*.rs.bk
+src-tauri/gen/schemas/
+
+# Tauri build artifacts (local release smoke tests)
+src-tauri/target/release/bundle/
+
+# Logs / runtime
+logs/
+*.log
+
+# IDE / editors
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+.idea/
+*.swp
+*.swo
+*~
+.project
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Python (optional local scripts / venv helpers)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.tmp-venv/
+
+# macOS code signing / notarization (local release experiments)
+*.p12
+*.mobileprovision
+*.cer
+*.provisionprofile
+
+# Windows signing (local release experiments)
+*.pfx
+
+# Local scratch / one-off exports
+*.bak
+*.tmp
+.cache/

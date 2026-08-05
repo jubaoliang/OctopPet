@@ -18,6 +18,8 @@ pub struct AppConfig {
     pub thread_id_by_agent: HashMap<String, String>,
     pub pet_x: Option<f64>,
     pub pet_y: Option<f64>,
+    pub shortcut_open_pet: String,
+    pub shortcut_open_home: String,
 }
 
 impl Default for AppConfig {
@@ -30,7 +32,19 @@ impl Default for AppConfig {
             thread_id_by_agent: HashMap::new(),
             pet_x: None,
             pet_y: None,
+            shortcut_open_pet: "CmdOrCtrl+Shift+O".into(),
+            shortcut_open_home: "CmdOrCtrl+Shift+H".into(),
         }
+    }
+}
+
+pub fn select_mascot(cfg: &mut AppConfig, mascot_id: &str) -> Result<(), String> {
+    match mascot_id {
+        "peek" | "type" => {
+            cfg.mascot_id = mascot_id.to_string();
+            Ok(())
+        }
+        _ => Err(format!("unsupported mascot: {mascot_id}")),
     }
 }
 
@@ -81,6 +95,8 @@ fn merge_patch(cfg: &mut AppConfig, patch: Value) -> Result<(), String> {
             }
             "petX" => cfg.pet_x = patch_field(key, value.clone())?,
             "petY" => cfg.pet_y = patch_field(key, value.clone())?,
+            "shortcutOpenPet" => cfg.shortcut_open_pet = patch_field(key, value.clone())?,
+            "shortcutOpenHome" => cfg.shortcut_open_home = patch_field(key, value.clone())?,
             _ => return Err(format!("unsupported config field: {key}")),
         }
     }

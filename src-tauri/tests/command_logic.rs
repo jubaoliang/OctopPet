@@ -4,11 +4,13 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use tauri_app_lib::{
-    config_cmd::{load_from_path, patch_at_path, save_to_path, AppConfig},
+use octop_pet_lib::{
+    config_cmd::{load_from_path, patch_at_path, save_to_path, select_mascot, AppConfig},
     secrets_cmd::{secret_account, validate_secret_key},
-    tray::select_mascot,
-    window_cmd::{chat_position, home_url, should_hide_on_close},
+    window_cmd::{
+        bottom_centered_position, centered_position, home_url, should_hide_on_close,
+        CHAT_BOTTOM_GAP_LOGICAL,
+    },
 };
 
 #[test]
@@ -23,6 +25,8 @@ fn app_config_defaults_match_the_frontend() {
             thread_id_by_agent: HashMap::new(),
             pet_x: None,
             pet_y: None,
+            shortcut_open_pet: "CmdOrCtrl+Shift+O".into(),
+            shortcut_open_home: "CmdOrCtrl+Shift+H".into(),
         }
     );
 }
@@ -37,6 +41,8 @@ fn app_config_serializes_with_frontend_field_names() {
     assert!(value.get("threadIdByAgent").is_some());
     assert!(value.get("petX").is_some());
     assert!(value.get("petY").is_some());
+    assert!(value.get("shortcutOpenPet").is_some());
+    assert!(value.get("shortcutOpenHome").is_some());
 }
 
 #[test]
@@ -143,27 +149,43 @@ fn home_url_has_exactly_one_trailing_slash() {
 }
 
 #[test]
-fn chat_position_prefers_right_and_falls_back_to_left() {
+fn windows_open_bottom_centered_with_gap() {
     assert_eq!(
-        chat_position((100, 80), (160, 160), (420, 560), (0, 0), (1200, 900)),
-        (260, 80)
+        bottom_centered_position((400, 560), (0, 0), (1200, 900), 96),
+        (400, 244) // (1200-400)/2=400, 900-560-96=244
     );
     assert_eq!(
-        chat_position((1050, 80), (160, 160), (420, 560), (0, 0), (1200, 900)),
-        (630, 80)
+        bottom_centered_position((480, 360), (100, 50), (1000, 800), 64),
+        (360, 426) // 100+(1000-480)/2=360, 50+800-360-64=426
+    );
+    // Too tall for work area → clamp to top.
+    assert_eq!(
+        bottom_centered_position((400, 900), (0, 0), (1200, 800), 96),
+        (400, 0)
     );
 }
 
 #[test]
-fn chat_position_is_clamped_to_monitor_work_area() {
+fn bottom_centered_position_is_clamped_to_monitor_work_area() {
     assert_eq!(
-        chat_position(
-            (-1700, -200),
-            (160, 160),
-            (420, 560),
-            (-1440, 25),
-            (1440, 875),
-        ),
-        (-1440, 25)
+        bottom_centered_position((420, 560), (-1440, 25), (1440, 875), 96),
+        (-930, 244) // -1440+(1440-420)/2=-930, 25+875-560-96=244
+    );
+}
+
+#[test]
+fn chat_bottom_gap_is_ninety_six_logical_pixels() {
+    assert!((CHAT_BOTTOM_GAP_LOGICAL - 96.0).abs() < f64::EPSILON);
+}
+
+#[test]
+fn windows_open_truly_centered() {
+    assert_eq!(
+        centered_position((400, 560), (0, 0), (1200, 900)),
+        (400, 170) // (1200-400)/2=400, (900-560)/2=170
+    );
+    assert_eq!(
+        centered_position((480, 360), (100, 50), (1000, 800)),
+        (360, 270) // 100+(1000-480)/2=360, 50+(800-360)/2=270
     );
 }

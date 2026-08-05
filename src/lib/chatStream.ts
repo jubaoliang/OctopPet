@@ -1,3 +1,4 @@
+import { buildUserMessageContent, type ChatAttachment } from "./octopHttp";
 import { normalizeBaseUrl } from "./configLogic";
 
 export function buildChatWsUrl(
@@ -20,14 +21,22 @@ export function buildUserTurnPayload(args: {
   text: string;
   threadId: string;
   sessionKey?: string;
+  attachments?: ChatAttachment[];
+  model?: string | null;
+  mcpServers?: string[];
 }): Record<string, unknown> {
+  const messageContent = buildUserMessageContent(args.text, args.attachments);
   const payload: Record<string, unknown> = {
     type: "user_turn",
-    text: args.text,
+    text: typeof messageContent === "string" ? messageContent : args.text,
     thread_id: args.threadId,
-    messages: [{ role: "user", content: args.text }],
+    messages: [{ role: "user", content: messageContent }],
   };
   if (args.sessionKey) payload.session_key = args.sessionKey;
+  if (args.model) payload.model = args.model;
+  if (args.mcpServers && args.mcpServers.length > 0) {
+    payload.mcp_servers = args.mcpServers;
+  }
   return payload;
 }
 

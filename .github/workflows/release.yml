@@ -1,0 +1,157 @@
+# Build OctopPet for macOS (Apple Silicon + Intel) and Windows (x64 + ARM64),
+# then attach installers to the GitHub Release for the pushed tag.
+#
+# Trigger: push a semver tag, e.g.  git tag v0.1.0 && git push origin v0.1.0
+# Manual:  Actions → Release → Run workflow (provide the same tag name)
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.1.0). Must match src-tauri/tauri.conf.json version."
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name || github.event.inputs.tag }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Verify tag matches app version
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+        run: |
+          APP_VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          TAG_VERSION="${RELEASE_TAG#v}"
+          if [ "$TAG_VERSION" != "$APP_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) != app version ($APP_VERSION)"
+            exit 1
+          fi
+
+      - name: Frontend tests
+        run: npm test
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+
+      - name: Ship bar (lint + typecheck + test)
+        run: make check
+
+  publish-tauri:
+    needs: check
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            label: macOS-Apple-Silicon
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            label: macOS-Intel
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            label: Windows-x64
+          - platform: windows-latest
+            target: aarch64-pc-windows-msvc
+            label: Windows-ARM64
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Extract changelog
+        id: notes
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          NOTES=$(node scripts/extract-changelog.mjs "$VERSION")
+          {
+            echo 'body<<EOF'
+            echo "$NOTES"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and upload release assets
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional code signing (see README “Release signing”):
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          # WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        with:
+          tagName: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+          releaseName: OctopPet ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+          releaseBody: |
+            ## OctopPet ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+
+            ${{ steps.notes.outputs.body }}
+
+            | 平台 | 说明 |
+            | --- | --- |
+            | macOS Apple Silicon | `.dmg` 或 `.app.tar.gz`（aarch64） |
+            | macOS Intel | `.dmg` 或 `.app.tar.gz`（x86_64） |
+            | Windows x64 | `.msi` 或 `.exe`（setup） |
+            | Windows ARM64 | `.msi` 或 `.exe`（ARM 设备） |
+
+            CI 产物默认**未签名**。macOS 首次打开可能需在「系统设置 → 隐私与安全性」中允许；正式分发请配置 Apple / Windows 签名 secrets。
+          releaseDraft: false
+          prerelease: ${{ contains(github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name, '-') }}
+          args: --target ${{ matrix.target }}

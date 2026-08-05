@@ -1,0 +1,266 @@
+/* ---------- Settings (Snipaste-like dark prefs) ---------- */
+
+html[data-window-label="settings"],
+html[data-window-label="settings"] body,
+html[data-window-label="settings"] #root {
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+  background: transparent;
+  color: #f5f5f7;
+  color-scheme: dark;
+}
+
+.settings-window {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: auto;
+  padding: 10px 12px 12px;
+  overflow: hidden;
+  background: #2c2c2e;
+  border: 1px solid #3a3a3c;
+  border-radius: 10px;
+  color: #f5f5f7;
+}
+
+.settings-tabs-bar {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  margin-bottom: 10px;
+  user-select: none;
+}
+
+.settings-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+
+.settings-tab {
+  appearance: none;
+  border: 0;
+  border-radius: 5px;
+  padding: 0.3rem 0.85rem;
+  background: transparent;
+  color: #f5f5f7;
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+.settings-tab.is-active {
+  background: #0a84ff;
+  color: #fff;
+}
+
+.settings-close {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #8e8e93;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.settings-close:hover {
+  background: #3a3a3c;
+  color: #fff;
+}
+
+.settings-frame {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  padding: 14px 16px 12px;
+  overflow: visible;
+  border: 1px solid #48484a;
+  border-radius: 8px;
+  background: #2c2c2e;
+}
+
+.settings-panel {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: 6.2rem minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 28px;
+}
+
+.settings-row label,
+.settings-row > span:first-child {
+  color: #f5f5f7;
+  font-size: 0.84rem;
+}
+
+.settings-row input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.34rem 0.55rem;
+  border: 1px solid #555;
+  border-radius: 5px;
+  background: #1c1c1e;
+  color: #f5f5f7;
+  font-size: 0.84rem;
+  outline: none;
+}
+
+.settings-row input:focus {
+  border-color: #0a84ff;
+}
+
+.settings-row input::placeholder {
+  color: #8e8e93;
+}
+
+.settings-about .settings-row > span:last-child {
+  color: #aeaeb2;
+  text-align: left;
+}
+
+.settings-subgroup {
+  padding: 10px 12px 12px;
+  border: 1px solid #48484a;
+  border-radius: 6px;
+  background: #2c2c2e;
+}
+
+.settings-subgroup-title {
+  margin: 0 0 10px;
+  color: #f5f5f7;
+  font-size: 0.84rem;
+}
+
+.mascot-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mascot-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background: transparent;
+  color: #d1d1d6;
+}
+
+.mascot-option img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  background: transparent;
+}
+
+.mascot-option span {
+  font-size: 0.72rem;
+}
+
+.mascot-option:hover {
+  border-color: #636366;
+}
+
+.mascot-option.is-selected {
+  border-color: #0a84ff;
+  background: rgba(10, 132, 255, 0.14);
+  color: #fff;
+}
+
+.settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 4px;
+}
+
+.settings-footer-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.settings-notice {
+  margin: 0;
+  min-width: 0;
+  font-size: 0.76rem;
+}
+
+.settings-notice--success {
+  color: #30d158;
+}
+
+.settings-notice--error {
+  color: #ff453a;
+}
+
+.settings-hint {
+  margin: 0;
+  color: #8e8e93;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.shortcut-recorder {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.34rem 0.55rem;
+  border: 1px solid #555;
+  border-radius: 5px;
+  background: #1c1c1e;
+  color: #f5f5f7;
+  font-size: 0.84rem;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+}
+
+.shortcut-recorder:hover:not(:disabled) {
+  border-color: #636366;
+}
+
+.shortcut-recorder:focus-visible,
+.shortcut-recorder.is-recording {
+  border-color: #0a84ff;
+  box-shadow: 0 0 0 1px rgba(10, 132, 255, 0.35);
+}
+
+.shortcut-recorder.is-recording {
+  color: #0a84ff;
+}
+
+.shortcut-recorder:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

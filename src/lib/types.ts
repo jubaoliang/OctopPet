@@ -8,6 +8,10 @@ export interface AppConfig {
   threadIdByAgent: Record<string, string>;
   petX: number | null;
   petY: number | null;
+  /** Tauri accelerator, e.g. CmdOrCtrl+Shift+O */
+  shortcutOpenPet: string;
+  /** Tauri accelerator, e.g. CmdOrCtrl+Shift+H */
+  shortcutOpenHome: string;
 }
 
 export interface AgentSummary {

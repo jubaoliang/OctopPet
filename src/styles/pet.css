@@ -1,0 +1,43 @@
+/* ---------- Pet ---------- */
+
+html[data-window-label="pet"],
+html[data-window-label="pet"] body,
+html[data-window-label="pet"] #root {
+  overflow: hidden;
+  /* `color-scheme: light` paints an opaque system canvas under transparent
+     pages on WKWebView — that is the gray rectangle around the mascot. */
+  color-scheme: normal;
+  background: transparent !important;
+  background-color: transparent !important;
+  /* A double-click extends the selection to the nearest selectable ancestor.
+     In a non-focusable window WebKit paints that with the inactive selection
+     color — a gray box over the whole pet. Nothing here may be selectable. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html[data-window-label="pet"] ::selection {
+  background: transparent;
+}
+
+.pet-window {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  user-select: none;
+  background: transparent;
+  background-color: transparent;
+}
+
+.pet-window:active {
+  cursor: grabbing;
+}
+
+.mascot-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
