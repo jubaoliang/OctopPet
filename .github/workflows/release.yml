@@ -122,6 +122,7 @@ jobs:
 
       - name: Extract changelog
         id: notes
+        shell: bash
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
         run: |

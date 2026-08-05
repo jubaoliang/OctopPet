@@ -39,5 +39,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Global shortcuts for open pet and open home
 - macOS and Windows CI/release workflows
 
-[Unreleased]: https://github.com/TencentCloud/octop-pet/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/TencentCloud/octop-pet/releases/tag/v0.1.0
+[Unreleased]: https://github.com/jubaoliang/OctopPet/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/jubaoliang/OctopPet/releases/tag/v0.1.0
