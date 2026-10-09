@@ -16,6 +16,8 @@ export const tauriApi = {
   showChatNearPet: () => invoke<void>("show_chat_near_pet"),
   hideChat: () => invoke<void>("hide_chat"),
   hidePet: () => invoke<void>("hide_pet"),
+  restorePetPosition: () =>
+    invoke<{ x: number; y: number }>("restore_pet_position"),
   showSettings: () => invoke<void>("show_settings"),
   placeWindowBottomCenter: (label: string) =>
     invoke<void>("place_window_bottom_center", { label }),

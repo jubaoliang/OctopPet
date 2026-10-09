@@ -18,6 +18,97 @@ pub fn should_hide_on_close(label: &str) -> bool {
     matches!(label, "chat" | "settings")
 }
 
+pub struct PetWorkArea {
+    pub position: (i32, i32),
+    pub size: (u32, u32),
+    pub scale_factor: f64,
+}
+
+/// Keep the whole pet inside the closest available work area, in physical pixels.
+pub fn pet_position(
+    position: (i32, i32),
+    logical_size: f64,
+    work_areas: &[PetWorkArea],
+) -> Option<(i32, i32)> {
+    work_areas
+        .iter()
+        .map(|area| {
+            let left = i64::from(area.position.0);
+            let top = i64::from(area.position.1);
+            let size = (logical_size * area.scale_factor).round() as i64;
+            let max_x = (left + i64::from(area.size.0) - size).max(left);
+            let max_y = (top + i64::from(area.size.1) - size).max(top);
+            (
+                i64::from(position.0).clamp(left, max_x) as i32,
+                i64::from(position.1).clamp(top, max_y) as i32,
+            )
+        })
+        .min_by_key(|&(x, y)| {
+            let dx = i128::from(x) - i128::from(position.0);
+            let dy = i128::from(y) - i128::from(position.1);
+            dx * dx + dy * dy
+        })
+}
+
+fn position_pet_on_screen(
+    app: &AppHandle,
+    requested: Option<PhysicalPosition<i32>>,
+) -> Result<PhysicalPosition<i32>, String> {
+    let pet = app
+        .get_webview_window("pet")
+        .ok_or_else(|| "pet window not found".to_string())?;
+    let current = pet
+        .outer_position()
+        .map_err(|error| format!("failed to read pet position: {error}"))?;
+    let position = requested.unwrap_or(current);
+    let size = pet
+        .inner_size()
+        .map_err(|error| format!("failed to read pet size: {error}"))?;
+    let scale = pet
+        .scale_factor()
+        .map_err(|error| format!("failed to read pet scale factor: {error}"))?;
+    let work_areas = pet
+        .available_monitors()
+        .map_err(|error| format!("failed to find pet monitors: {error}"))?
+        .iter()
+        .map(|monitor| {
+            let area = monitor.work_area();
+            PetWorkArea {
+                position: (area.position.x, area.position.y),
+                size: (area.size.width, area.size.height),
+                scale_factor: monitor.scale_factor(),
+            }
+        })
+        .collect::<Vec<_>>();
+    let (x, y) = pet_position(
+        (position.x, position.y),
+        f64::from(size.width) / scale,
+        &work_areas,
+    )
+    .ok_or_else(|| "no available monitor for pet window".to_string())?;
+    let corrected = PhysicalPosition::new(x, y);
+    if current != corrected {
+        pet.set_position(corrected)
+            .map_err(|error| format!("failed to position pet window: {error}"))?;
+    }
+    crate::config_cmd::patch_config(app.clone(), serde_json::json!({ "petX": x, "petY": y }))?;
+    Ok(corrected)
+}
+
+pub fn ensure_pet_on_screen(app: &AppHandle) -> Result<(), String> {
+    position_pet_on_screen(app, None).map(|_| ())
+}
+
+#[tauri::command]
+pub fn restore_pet_position(app: AppHandle) -> Result<PhysicalPosition<i32>, String> {
+    let cfg = crate::config_cmd::load_config(app.clone())?;
+    let requested = cfg
+        .pet_x
+        .zip(cfg.pet_y)
+        .map(|(x, y)| PhysicalPosition::new(x.round() as i32, y.round() as i32));
+    position_pet_on_screen(&app, requested)
+}
+
 /// Chat and settings hide on click-away only when the setting is off.
 /// The pet never hides this way.
 pub fn should_hide_on_unfocus(label: &str, keep_windows_visible: bool) -> bool {

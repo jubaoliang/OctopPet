@@ -3,17 +3,19 @@ import { useEffect, useRef, useState } from "react";
 import MascotImage from "../components/MascotImage";
 import { DEFAULT_APP_CONFIG, MASCOT_SRC } from "../lib/configLogic";
 import { showPetContextMenu } from "../lib/petContextMenu";
+import { clampPetPosition } from "../lib/petMotion";
 import { tauriApi } from "../lib/tauriApi";
 import {
   clearPetWebviewChrome,
+  getPetPointerState,
   getPetWebviewWindow,
   onPetWebviewFocusChanged,
   onPetWebviewMoved,
   petSupportsManualMotion,
   setPetWebviewLogicalSize,
-  setPetWebviewLogicalPosition,
   setPetWebviewPosition,
   startPetWebviewDrag,
+  type PetPointerState,
 } from "../lib/tauriWebviewApi";
 import type { AppConfig, MascotId } from "../lib/types";
 
@@ -47,6 +49,9 @@ export default function PetWindow() {
   const pointerStartRef = useRef({ x: 0, y: 0 });
   const grabOffsetRef = useRef({ x: 0, y: 0 });
   const lastPositionRef = useRef({ x: 0, y: 0 });
+  const pointerStateRef = useRef<PetPointerState | null>(null);
+  const pointerSequenceRef = useRef(0);
+  const pendingPointerMoveRef = useRef<Promise<void>>(Promise.resolve());
   const pointerSamplesRef = useRef<PointerSample[]>([]);
   const glideFrameRef = useRef<number | null>(null);
   const petSizeRef = useRef(DEFAULT_APP_CONFIG.petSize);
@@ -87,10 +92,7 @@ export default function PetWindow() {
       petSizeRef.current = clampPetSize(config.petSize);
       await setPetWebviewLogicalSize(petSizeRef.current);
 
-      if (config.petX !== null && config.petY !== null) {
-        lastPositionRef.current = { x: config.petX, y: config.petY };
-        await setPetWebviewPosition(config.petX, config.petY);
-      }
+      lastPositionRef.current = await tauriApi.restorePetPosition();
       if (disposed) return;
 
       await tauriApi
@@ -160,6 +162,7 @@ export default function PetWindow() {
 
     return () => {
       disposed = true;
+      pointerSequenceRef.current += 1;
       if (glideFrameRef.current !== null) {
         cancelAnimationFrame(glideFrameRef.current);
       }
@@ -170,7 +173,7 @@ export default function PetWindow() {
     };
   }, []);
 
-  const handlePointerDown = (event: React.PointerEvent<HTMLElement>) => {
+  const handlePointerDown = async (event: React.PointerEvent<HTMLElement>) => {
     if (event.button !== 0) return;
 
     if (glideFrameRef.current !== null) {
@@ -178,16 +181,23 @@ export default function PetWindow() {
       glideFrameRef.current = null;
     }
     clearPetSelection();
+    const sequence = ++pointerSequenceRef.current;
     pointerDownRef.current = true;
     movedSincePointerDownRef.current = false;
     dragStartedRef.current = false;
     pointerStartRef.current = { x: event.clientX, y: event.clientY };
     grabOffsetRef.current = { x: event.clientX, y: event.clientY };
-    pointerSamplesRef.current = [
-      { x: event.screenX, y: event.screenY, time: performance.now() },
-    ];
+    pointerSamplesRef.current = [];
     if (petSupportsManualMotion() && event.currentTarget.setPointerCapture) {
       event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    if (petSupportsManualMotion()) {
+      const state = await getPetPointerState();
+      if (sequence !== pointerSequenceRef.current) return;
+      pointerStateRef.current = state;
+      pointerSamplesRef.current = [
+        { ...state.cursor, time: performance.now() },
+      ];
     }
   };
 
@@ -203,19 +213,32 @@ export default function PetWindow() {
     movedSincePointerDownRef.current = true;
     if (petSupportsManualMotion()) {
       dragStartedRef.current = true;
-      const position = {
-        x: event.screenX - grabOffsetRef.current.x,
-        y: event.screenY - grabOffsetRef.current.y,
-      };
-      lastPositionRef.current = position;
-      const now = performance.now();
-      pointerSamplesRef.current = [
-        ...pointerSamplesRef.current.filter(
-          (sample) => now - sample.time <= 100,
-        ),
-        { x: event.screenX, y: event.screenY, time: now },
-      ].slice(-6);
-      void setPetWebviewLogicalPosition(position.x, position.y);
+      const sequence = pointerSequenceRef.current;
+      pendingPointerMoveRef.current = getPetPointerState()
+        .then(async (state) => {
+          if (sequence !== pointerSequenceRef.current) return;
+          pointerStateRef.current = state;
+          // Native cursor/move events and saved coordinates are physical pixels.
+          // Only the grab offset from the DOM needs the window's DPI conversion.
+          const position = clampPetPosition(
+            {
+              x: state.cursor.x - grabOffsetRef.current.x * state.scaleFactor,
+              y: state.cursor.y - grabOffsetRef.current.y * state.scaleFactor,
+            },
+            petSizeRef.current * state.scaleFactor,
+            state.workArea,
+          );
+          lastPositionRef.current = position;
+          const now = performance.now();
+          pointerSamplesRef.current = [
+            ...pointerSamplesRef.current.filter(
+              (sample) => now - sample.time <= 100,
+            ),
+            { ...state.cursor, time: now },
+          ].slice(-6);
+          await setPetWebviewPosition(position.x, position.y);
+        })
+        .catch((error) => console.error("读取宠物拖动位置失败", error));
       return;
     }
     if (dragStartedRef.current) return;
@@ -225,16 +248,19 @@ export default function PetWindow() {
 
   const startGlide = () => {
     const samples = pointerSamplesRef.current;
-    if (samples.length < 2) return;
+    const state = pointerStateRef.current;
+    if (samples.length < 2 || !state) return;
+    const stopSpeed = GLIDE_STOP_SPEED * state.scaleFactor;
+    const maxSpeed = GLIDE_MAX_SPEED * state.scaleFactor;
     const first = samples[0];
     const last = samples[samples.length - 1];
     const elapsed = Math.max(1, last.time - first.time);
     let vx = (last.x - first.x) / elapsed;
     let vy = (last.y - first.y) / elapsed;
     const speed = Math.hypot(vx, vy);
-    if (speed < GLIDE_STOP_SPEED) return;
-    if (speed > GLIDE_MAX_SPEED) {
-      const scale = GLIDE_MAX_SPEED / speed;
+    if (speed < stopSpeed) return;
+    if (speed > maxSpeed) {
+      const scale = maxSpeed / speed;
       vx *= scale;
       vy *= scale;
     }
@@ -253,36 +279,18 @@ export default function PetWindow() {
         x: lastPositionRef.current.x + vx * elapsedMs,
         y: lastPositionRef.current.y + vy * elapsedMs,
       };
-      const desktop = window.screen as Screen & {
-        availLeft?: number;
-        availTop?: number;
-      };
-      const left = desktop.availLeft ?? 0;
-      const top = desktop.availTop ?? 0;
-      const right = left + desktop.availWidth;
-      const bottom = top + desktop.availHeight;
-      const size = petSizeRef.current;
-      // Avoid teleporting a pet on a secondary monitor when the browser only
-      // exposes the primary screen. Clamp only when the current point is in it.
-      const current = lastPositionRef.current;
-      if (
-        current.x + size > left &&
-        current.x < right &&
-        current.y + size > top &&
-        current.y < bottom
-      ) {
-        const clamped = {
-          x: Math.min(right - size, Math.max(left, position.x)),
-          y: Math.min(bottom - size, Math.max(top, position.y)),
-        };
-        if (clamped.x !== position.x) vx = 0;
-        if (clamped.y !== position.y) vy = 0;
-        position = clamped;
-      }
+      const clamped = clampPetPosition(
+        position,
+        petSizeRef.current * state.scaleFactor,
+        state.workArea,
+      );
+      if (clamped.x !== position.x) vx = 0;
+      if (clamped.y !== position.y) vy = 0;
+      position = clamped;
       lastPositionRef.current = position;
-      void setPetWebviewLogicalPosition(position.x, position.y);
+      void setPetWebviewPosition(position.x, position.y);
 
-      if (Math.hypot(vx, vy) > GLIDE_STOP_SPEED) {
+      if (Math.hypot(vx, vy) > stopSpeed) {
         glideFrameRef.current = requestAnimationFrame(step);
       } else {
         glideFrameRef.current = null;
@@ -292,17 +300,22 @@ export default function PetWindow() {
     glideFrameRef.current = requestAnimationFrame(step);
   };
 
-  const endPointer = (event: React.PointerEvent<HTMLElement>) => {
-    if (dragStartedRef.current) {
-      void clearPetWebviewChrome(getPetWebviewWindow());
-      if (petSupportsManualMotion()) {
-        startGlide();
-      }
-    }
+  const endPointer = async (event: React.PointerEvent<HTMLElement>) => {
+    const dragged = dragStartedRef.current;
+    const sequence = pointerSequenceRef.current;
+    const canceled = event.type === "pointercancel";
     pointerDownRef.current = false;
     dragStartedRef.current = false;
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (dragged) {
+      void clearPetWebviewChrome(getPetWebviewWindow());
+      if (petSupportsManualMotion() && !canceled) {
+        // Do not discard the final native cursor query when release beats IPC.
+        await pendingPointerMoveRef.current;
+        if (sequence === pointerSequenceRef.current) startGlide();
+      }
     }
   };
 
