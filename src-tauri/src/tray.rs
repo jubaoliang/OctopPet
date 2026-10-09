@@ -50,6 +50,7 @@ fn open_home_shortcut(cfg: &AppConfig) -> String {
 }
 
 pub fn open_pet(app: &AppHandle) -> Result<(), String> {
+    crate::window_cmd::ensure_pet_on_screen(app)?;
     let pet = app
         .get_webview_window("pet")
         .ok_or_else(|| "pet window not found".to_string())?;

@@ -1,11 +1,35 @@
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
-  LogicalPosition,
   LogicalSize,
   PhysicalPosition,
+  availableMonitors,
+  cursorPosition,
+  type Monitor,
 } from "@tauri-apps/api/window";
 
 export type PetWebviewWindow = ReturnType<typeof getCurrentWebviewWindow>;
+
+export interface PetPointerState {
+  cursor: { x: number; y: number };
+  scaleFactor: number;
+  workArea: Monitor["workArea"] | null;
+}
+
+export async function getPetPointerState(): Promise<PetPointerState> {
+  const [cursor, scaleFactor, monitors] = await Promise.all([
+    cursorPosition(),
+    getPetWebviewWindow().scaleFactor(),
+    availableMonitors(),
+  ]);
+  const monitor = monitors.find(
+    ({ position, size }) =>
+      cursor.x >= position.x &&
+      cursor.x < position.x + size.width &&
+      cursor.y >= position.y &&
+      cursor.y < position.y + size.height,
+  );
+  return { cursor, scaleFactor, workArea: monitor?.workArea ?? null };
+}
 
 export function getPetWebviewWindow(): PetWebviewWindow {
   return getCurrentWebviewWindow();
@@ -42,16 +66,7 @@ export async function setPetWebviewPosition(
   y: number,
 ): Promise<void> {
   await getPetWebviewWindow()
-    .setPosition(new PhysicalPosition(x, y))
-    .catch((error) => console.error("恢复宠物位置失败", error));
-}
-
-export async function setPetWebviewLogicalPosition(
-  x: number,
-  y: number,
-): Promise<void> {
-  await getPetWebviewWindow()
-    .setPosition(new LogicalPosition(x, y))
+    .setPosition(new PhysicalPosition(Math.round(x), Math.round(y)))
     .catch((error) => console.error("移动宠物位置失败", error));
 }
 

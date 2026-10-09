@@ -52,6 +52,7 @@ pub fn run() {
             window_cmd::show_chat_near_pet,
             window_cmd::hide_chat,
             window_cmd::hide_pet,
+            window_cmd::restore_pet_position,
             window_cmd::show_settings,
             window_cmd::place_window_bottom_center,
             window_cmd::place_window_centered,

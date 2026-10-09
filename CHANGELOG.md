@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Pet dragging and inertia use physical coordinates consistently on high-DPI displays, preventing the pet from drifting off-screen on Retina Macs.
+- Restore saved pet positions inside the nearest available monitor work area on startup and when opening the pet from the tray or shortcut, including after a monitor is disconnected.
+
 ## [0.2.0] - 2026-09-03
 
 ### Fixed

@@ -12,8 +12,9 @@ use octop_pet_lib::{
     },
     window_cmd::{
         bottom_anchored_position, bottom_centered_position, centered_position, chat_position,
-        home_url, should_hide_on_close, should_hide_on_unfocus, transparent_chrome_target,
-        TransparentChromeTarget, CHAT_BOTTOM_GAP_LOGICAL, RESIZE_ANIMATION_DURATION,
+        home_url, pet_position, should_hide_on_close, should_hide_on_unfocus,
+        transparent_chrome_target, PetWorkArea, TransparentChromeTarget, CHAT_BOTTOM_GAP_LOGICAL,
+        RESIZE_ANIMATION_DURATION,
     },
 };
 
@@ -231,6 +232,79 @@ fn chat_position_is_clamped_to_monitor_work_area() {
         ),
         (-1440, 25)
     );
+}
+
+#[test]
+fn pet_restores_off_screen_retina_position_inside_the_work_area() {
+    let area = PetWorkArea {
+        position: (0, 78),
+        size: (3600, 2160),
+        scale_factor: 2.0,
+    };
+    assert_eq!(
+        pet_position((7278, 3250), 160.0, &[area]),
+        Some((3280, 1918))
+    );
+}
+
+#[test]
+fn pet_preserves_visible_positions_on_negative_coordinate_monitors() {
+    let areas = [
+        PetWorkArea {
+            position: (0, 78),
+            size: (3600, 2160),
+            scale_factor: 2.0,
+        },
+        PetWorkArea {
+            position: (-1920, -400),
+            size: (1920, 1080),
+            scale_factor: 1.0,
+        },
+    ];
+    assert_eq!(
+        pet_position((-1800, -200), 160.0, &areas),
+        Some((-1800, -200))
+    );
+}
+
+#[test]
+fn pet_uses_the_nearest_remaining_monitor_after_disconnect() {
+    let area = PetWorkArea {
+        position: (0, 40),
+        size: (1920, 1040),
+        scale_factor: 1.0,
+    };
+    assert_eq!(pet_position((-1800, 300), 160.0, &[area]), Some((0, 300)));
+}
+
+#[test]
+fn pet_uses_each_monitors_scale_when_clamping_the_whole_window() {
+    let areas = [
+        PetWorkArea {
+            position: (0, 0),
+            size: (1920, 1080),
+            scale_factor: 1.0,
+        },
+        PetWorkArea {
+            position: (1920, 0),
+            size: (3600, 2160),
+            scale_factor: 2.0,
+        },
+    ];
+    assert_eq!(
+        pet_position((5500, 2140), 160.0, &areas),
+        Some((5200, 1840))
+    );
+}
+
+#[test]
+fn pet_clamps_to_the_origin_when_larger_than_the_work_area() {
+    let area = PetWorkArea {
+        position: (100, 40),
+        size: (200, 200),
+        scale_factor: 2.0,
+    };
+    assert_eq!(pet_position((500, -400), 160.0, &[area]), Some((100, 40)));
 }
 
 #[test]
